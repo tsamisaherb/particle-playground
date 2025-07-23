@@ -1,20 +1,20 @@
 use crate::*;
 
-#[derive(BorshSerialize, BorshDeserialize, PartialEq, Debug, Clone)]
+#[turbo::serialize]
 pub enum BurstSource {
     Point(f32, f32),
     Circle { center: (f32, f32), radius: f32 },
     Rectangle { min: (f32, f32), max: (f32, f32) },
 }
 
-#[derive(BorshSerialize, BorshDeserialize, PartialEq, Debug, Clone)]
+#[turbo::serialize]
 pub enum Shape {
     Square,
     Circle,
     Sprite { name: String },
 }
 
-#[derive(BorshSerialize, BorshDeserialize, PartialEq, Debug, Clone)]
+#[turbo::serialize]
 pub struct Particle {
     pub pos: (f32, f32),
     pub vel: (f32, f32),
@@ -26,7 +26,7 @@ pub struct Particle {
     pub should_fade_out: bool,
 }
 
-#[derive(BorshSerialize, BorshDeserialize, PartialEq, Debug, Clone)]
+#[turbo::serialize]
 pub struct BurstConfig {
     pub source: BurstSource,
     pub shape: Shape,
@@ -41,7 +41,7 @@ pub struct BurstConfig {
 
 impl BurstConfig {}
 
-#[derive(BorshSerialize, BorshDeserialize, PartialEq, Debug, Clone)]
+#[turbo::serialize]
 pub struct ParticleManager {
     pub bursts: Vec<Vec<Particle>>,
 }
@@ -72,7 +72,7 @@ impl ParticleManager {
             return min;
         }
 
-        min + (rand() % scaled_range) as f32 / 1000.0
+        min + (random::u32() % scaled_range) as f32 / 1000.0
     }
 
     // Helper function for generating random integer values in a range
@@ -80,7 +80,7 @@ impl ParticleManager {
         if max <= min {
             return min;
         }
-        min + (rand() % (max - min))
+        min + (random::u32() % (max - min))
     }
 
     fn create_particle(&self, config: &BurstConfig) -> Particle {

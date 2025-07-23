@@ -1,0 +1,8 @@
+name = "Particle Playground"
+version = "1.0.0"
+author = "Turbo"
+description = "Particle System for Turbo"
+
+[canvas]
+width = 384
+height = 216

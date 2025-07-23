@@ -1,3 +1,5 @@
+//lib.rs
+
 mod particles;
 use particles::*;
 
@@ -5,22 +7,18 @@ const TRAIL_CIRCLE_POSITION: (f32, f32) = (40.0, 162.0);
 const EXPLOSION_SQUARE_POSITION: (f32, f32) = (144.0, 168.0);
 const DUST_SQUARE_POSITION: (f32, f32) = (330.0, 168.0);
 
-turbo::cfg! {r#"
-    name = "Partcile Playground"
-    version = "1.0.0"
-    author = "Turbo"
-    description = "Particle System for Turbo OS"
-    [settings]
-    resolution = [384, 216]
-"#}
 
-turbo::init! {
+use turbo::*;
+
+#[turbo::game]
 struct GameState {
     particle_manager: ParticleManager,
     trail_circle: TrailCircle,
     explosion_square: ExplosionSquare,
     dust_square: DustSquare,
-} = {
+  }
+impl GameState {
+    fn new() -> Self {
         Self {
             particle_manager: ParticleManager::new(),
             trail_circle: TrailCircle::new(TRAIL_CIRCLE_POSITION.0, TRAIL_CIRCLE_POSITION.1, 16.0, 0x8833AAff),
@@ -28,116 +26,115 @@ struct GameState {
             dust_square: DustSquare::new(DUST_SQUARE_POSITION.0, DUST_SQUARE_POSITION.1, 16.0, 0x3333CCff, 186.0),
         }
     }
+
+    fn update(&mut self) {
+        clear(0x000000ff);
+        let p = pointer::screen();
+        let viewport = bounds::screen();
+        let bottom_buttons = viewport
+            .height(32)
+            .inset_left(8)
+            .inset_right(8)
+            .anchor_bottom(&viewport)
+            .inset_bottom(12)
+            .columns_with_gap(4, 12);
+        for (i, btn) in bottom_buttons.into_iter().enumerate() {
+            let label = match i {
+                0 => "Trail",
+                1 => "Explosion",
+                2 => "Confetti",
+                3 => "Dust",
+                _ => "",
+            };
+            let (regular_color, hover_color) = match i {
+                0 => (0x8833AAff, 0xAA55CCff),
+                1 => (0xCC3333ff, 0xFF5555ff),
+                2 => (0x33CCFFff, 0x66DDFFFF),
+                3 => (0x3333CCff, 0x5555FFff),
+                _ => (0x3333CCff, 0x5555FFff),
+            };
+            let is_btn_hovered = p.intersects_bounds(btn);   
+            rect!(
+                color = if is_btn_hovered {
+                    hover_color
+                } else if p.just_pressed_bounds(btn) {
+                    hover_color
+                } else {
+                    regular_color
+                },
+                w = btn.w(),
+                h = btn.h(),
+                x = btn.x(),
+                y = btn.y(),
+                border_radius = 2,
+            );
+            let btn_inner = btn.inset_left(4).inset_top(4);
+            text!(label, x = btn_inner.x(), y = btn_inner.y(), font = "medium");
+            if p.just_pressed_bounds(btn) {
+                match i {
+                    0 => {
+                        if !self.trail_circle.active {
+                            // Activate the trail circle when clicking fireworks button
+                            self
+                                .trail_circle
+                                .activate(TRAIL_CIRCLE_POSITION.0, TRAIL_CIRCLE_POSITION.1);
+                        }
+                    }
+                    1 => {
+                        if self.explosion_square.trigger() {
+                            // Create burst at the square's position
+                            self
+                                .particle_manager
+                                .create_burst(&explosion(self.explosion_square.pos));
+                        }
+                    }
+                    2 => {
+                        self.particle_manager.create_burst(&confetti(0x33CCFFff));
+                        self.particle_manager.create_burst(&confetti(0xAA55CCff));
+                        self.particle_manager.create_burst(&confetti(0x5555FFff));
+                    }
+                    3 => {
+                        self.dust_square.trigger();
+                    }
+                    _ => {
+                        //do nothing
+                    }
+                };
+            };
+        }
+
+        let mut make_trail = false;
+        if self.trail_circle.active {
+            make_trail = self.trail_circle.update();
+        }
+        self.trail_circle.draw();
+        if make_trail {
+            let trail_pos = (
+                self.trail_circle.pos.0 + self.trail_circle.size / 2.0,
+                self.trail_circle.pos.1 + self.trail_circle.size / 2.0,
+            );
+            self.particle_manager.create_burst(&trail(trail_pos));
+        }
+
+        self.explosion_square.update();
+        self.explosion_square.draw();
+
+        if self.dust_square.update() {
+            // Create dust particles when the Square hits the 'ground'.
+            let dust_pos = (
+                self.dust_square.pos.0,
+                self.dust_square.pos.1 + self.dust_square.size / 2.0,
+            );
+            self.particle_manager.create_burst(&dust(dust_pos));
+        }
+        self.dust_square.draw();
+
+        // Update and draw particles
+        self.particle_manager.update();
+        self.particle_manager.draw();
+    }
 }
 
-turbo::go!({
-    let mut state = GameState::load();
-    clear(0x000000ff);
-
-    let viewport = Bounds::viewport();
-    let bottom_buttons = viewport
-        .height(32)
-        .inset_left(8)
-        .inset_right(8)
-        .anchor_bottom(&viewport)
-        .inset_bottom(12)
-        .columns_with_gap(4, 12);
-    for (i, btn) in bottom_buttons.into_iter().enumerate() {
-        let label = match i {
-            0 => "Trail",
-            1 => "Explosion",
-            2 => "Confetti",
-            3 => "Dust",
-            _ => "",
-        };
-        let (regular_color, hover_color) = match i {
-            0 => (0x8833AAff, 0xAA55CCff),
-            1 => (0xCC3333ff, 0xFF5555ff),
-            2 => (0x33CCFFff, 0x66DDFFFF),
-            3 => (0x3333CCff, 0x5555FFff),
-            _ => (0x3333CCff, 0x5555FFff),
-        };
-        rect!(
-            color = if btn.is_pressed() {
-                hover_color
-            } else if btn.is_hovered() {
-                hover_color
-            } else {
-                regular_color
-            },
-            w = btn.w(),
-            h = btn.h(),
-            x = btn.x(),
-            y = btn.y(),
-            border_radius = 2,
-        );
-        let btn_inner = btn.inset_left(4).inset_top(4);
-        text!(label, x = btn_inner.x(), y = btn_inner.y(), font = Font::M);
-        if btn.is_just_pressed() {
-            match i {
-                0 => {
-                    if !state.trail_circle.active {
-                        // Activate the trail circle when clicking fireworks button
-                        state
-                            .trail_circle
-                            .activate(TRAIL_CIRCLE_POSITION.0, TRAIL_CIRCLE_POSITION.1);
-                    }
-                }
-                1 => {
-                    if state.explosion_square.trigger() {
-                        // Create burst at the square's position
-                        state
-                            .particle_manager
-                            .create_burst(&explosion(state.explosion_square.pos));
-                    }
-                }
-                2 => {
-                    state.particle_manager.create_burst(&confetti(0x33CCFFff));
-                    state.particle_manager.create_burst(&confetti(0xAA55CCff));
-                    state.particle_manager.create_burst(&confetti(0x5555FFff));
-                }
-                3 => {
-                    state.dust_square.trigger();
-                }
-                _ => {
-                    //do nothing
-                }
-            };
-        };
-    }
-
-    let mut make_trail = false;
-    if state.trail_circle.active {
-        make_trail = state.trail_circle.update();
-    }
-    state.trail_circle.draw();
-    if make_trail {
-        let trail_pos = (
-            state.trail_circle.pos.0 + state.trail_circle.size / 2.0,
-            state.trail_circle.pos.1 + state.trail_circle.size / 2.0,
-        );
-        state.particle_manager.create_burst(&trail(trail_pos));
-    }
-
-    state.explosion_square.update();
-    state.explosion_square.draw();
-
-    if state.dust_square.update() {
-        // Create dust particles when the Square hits the 'ground'.
-        let dust_pos = (
-            state.dust_square.pos.0,
-            state.dust_square.pos.1 + state.dust_square.size / 2.0,
-        );
-        state.particle_manager.create_burst(&dust(dust_pos));
-    }
-    state.dust_square.draw();
-
-    // Update and draw particles
-    state.particle_manager.update();
-    state.particle_manager.draw();
-
-    GameState::save(&state);
-});
 
 fn trail(pos: (f32, f32)) -> BurstConfig {
     BurstConfig {
@@ -203,7 +200,8 @@ fn confetti(color: u32) -> BurstConfig {
         should_fade_out: false,
     }
 }
-#[derive(BorshSerialize, BorshDeserialize, PartialEq, Debug, Clone)]
+
+#[turbo::serialize]
 pub struct DustSquare {
     pub pos: (f32, f32),
     pub size: f32,
@@ -294,7 +292,7 @@ impl DustSquare {
     }
 }
 
-#[derive(BorshSerialize, BorshDeserialize, PartialEq, Debug, Clone)]
+#[turbo::serialize]
 pub struct ExplosionSquare {
     pub pos: (f32, f32),
     pub size: f32,
@@ -345,7 +343,7 @@ impl ExplosionSquare {
     }
 }
 
-#[derive(BorshSerialize, BorshDeserialize, PartialEq, Debug, Clone)]
+#[turbo::serialize]
 pub struct TrailCircle {
     pub pos: (f32, f32),
     pub original_pos: (f32, f32),
@@ -411,7 +409,7 @@ impl TrailCircle {
     }
 }
 
-#[derive(BorshSerialize, BorshDeserialize, PartialEq, Debug, Clone)]
+#[turbo::serialize]
 pub struct Button {
     pub rect: (f32, f32, f32, f32), // (x, y, width, height)
     pub label: String,
